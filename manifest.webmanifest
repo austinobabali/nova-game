@@ -1,0 +1,9 @@
+{
+  "name": "NOVA：星光逆襲",
+  "short_name": "NOVA",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#120c10",
+  "theme_color": "#120c10"
+}
