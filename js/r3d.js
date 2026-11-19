@@ -182,74 +182,289 @@
   function eyes(g, y, z, dx, r, color) {
     for (const s of [-1, 1]) part(g, SPH, new T.MeshBasicMaterial({ color: color || 0x1b2440 }), dx * s, y, z, r, r * 1.3, r * 0.6, false);
   }
+  function brows(g, y, z, dx, w, color) {
+    for (const s of [-1, 1]) part(g, BOX, toon(color || 0x111111), dx * s, y, z, w, w * 0.28, 0.02, false).rotation.z = 0.45 * s;
+  }
+  function textSprite(txt, bgc, fg, w) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const x = c.getContext('2d');
+    if (bgc) { x.fillStyle = bgc; x.beginPath(); x.moveTo(16, 4); x.arcTo(124, 4, 124, 52, 14); x.arcTo(124, 52, 4, 52, 14); x.lineTo(40, 52); x.lineTo(28, 62); x.lineTo(30, 52); x.arcTo(4, 52, 4, 4, 14); x.arcTo(4, 4, 124, 4, 14); x.closePath(); x.fill(); }
+    x.font = '900 34px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = fg; x.fillText(txt, 64, 29);
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
+    const s = new T.Sprite(new T.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+    s.scale.set(w || 0.8, (w || 0.8) / 2, 1); return s;
+  }
+  function legPair(body, color, shoe, x, len, r) {
+    const legs = [];
+    for (const s of [-1, 1]) {
+      const p = new T.Group(); p.position.set(x * s, len, 0); body.add(p);
+      part(p, cap(r, len * 0.6), toon(color), 0, -len / 2, 0);
+      part(p, SPH, toon(shoe), 0, -len + r * 0.6, r * 0.6, r * 1.4, r, r * 2);
+      legs.push(p);
+    }
+    return legs;
+  }
+  function arm(body, x, y, color, len, r, rx) {
+    const p = new T.Group(); p.position.set(x, y, 0); p.rotation.x = rx || 0; body.add(p);
+    part(p, cap(r, len), toon(color), 0, -len / 2 - r, 0);
+    return p;
+  }
+  function walk(o, t, mv, spd) {
+    if (!o.legs) return;
+    const s = mv ? Math.sin(t * (spd || 10)) * 0.55 : 0;
+    o.legs[0].rotation.x += (s - o.legs[0].rotation.x) * 0.3;
+    o.legs[1].rotation.x += (-s - o.legs[1].rotation.x) * 0.3;
+    o.body.position.y = mv ? Math.abs(Math.cos(t * (spd || 10))) * 0.05 : o.body.position.y * 0.8;
+  }
+  function groundAura(g, color, r) {
+    const m = new T.Mesh(new T.RingGeometry(r * 0.75, r, 56), glow(color, 0.45));
+    m.rotation.x = -Math.PI / 2; m.position.y = 0.05; g.add(m);
+    const d = new T.Mesh(new T.CircleGeometry(r * 0.75, 40), glow(color, 0.12));
+    d.rotation.x = -Math.PI / 2; d.position.y = 0.04; g.add(d);
+    return m;
+  }
+
   const ENEMY = {
-    note(g) {
-      part(g, SPH, toon(0x7a4ad6), 0, 0.45, 0, 0.42, 0.36, 0.4);
-      part(g, cyl(0.05, 0.05, 1.0, 8), toon(0x5a2fb0), 0.36, 0.95, 0);
-      part(g, BOX, toon(0x5a2fb0), 0.55, 1.35, 0, 0.4, 0.12, 0.08);
-      eyes(g, 0.52, 0.36, 0.13, 0.07, 0xff3355);
+    // 走音音符：紫色音符頭＋捲曲符尾＋環繞五線譜光環
+    note(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      part(b, SPH, toon(0x7a4ad6), 0, 0.5, 0, 0.42, 0.34, 0.38).rotation.z = -0.35;
+      part(b, SPH, new T.MeshBasicMaterial({ color: 0xd9c2ff, transparent: true, opacity: 0.6 }), -0.14, 0.68, 0.22, 0.1, 0.06, 0.05, false);
+      part(b, cyl(0.045, 0.045, 1.05, 8), toon(0x5a2fb0), 0.36, 1.0, 0);
+      const flag = (o.flag = new T.Group()); flag.position.set(0.36, 1.5, 0); b.add(flag);
+      part(flag, new T.TorusGeometry(0.22, 0.055, 8, 18, Math.PI), toon(0x5a2fb0), 0.2, -0.2, 0, 1, 1, 1, false).rotation.z = Math.PI * 0.55;
+      eyes(b, 0.55, 0.35, 0.13, 0.075, 0xffffff);
+      eyes(b, 0.53, 0.39, 0.13, 0.035, 0xff3355);
+      brows(b, 0.69, 0.37, 0.13, 0.12, 0x2a1050);
+      part(b, BOX, toon(0x2a1050), 0, 0.39, 0.36, 0.14, 0.03, 0.02, false).rotation.z = 0.15;
+      const ring = (o.ring = new T.Mesh(new T.TorusGeometry(0.65, 0.012, 6, 48), glow(0xc58fff, 0.8)));
+      ring.rotation.x = Math.PI / 2.4; ring.position.y = 0.6; g.add(ring);
+      o.anim = (e, o, t) => { o.body.rotation.z = Math.sin(t * 4) * 0.15; o.flag.rotation.z = Math.sin(t * 10) * 0.25; o.ring.rotation.z = t * 1.5; };
     },
-    slime(g) { part(g, SPH, toon(0x7fb4e8), 0, 0.33, 0, 0.5, 0.36, 0.5); eyes(g, 0.4, 0.44, 0.15, 0.06); },
-    troll(g) {
-      part(g, cap(0.33, 0.45), toon(0x6b6b78), 0, 0.6, 0);
-      part(g, SPH, toon(0x6b6b78), 0, 1.15, 0, 0.36, 0.36, 0.36);
-      part(g, SPH, toon(0xe8c4a8), 0, 1.1, 0.12, 0.26, 0.26, 0.24, false);
-      eyes(g, 1.13, 0.34, 0.09, 0.045, 0xc0182f);
-      part(g, BOX, toon(0x111111, 0x5ce1ff, 1.4), 0.3, 0.7, 0.3, 0.14, 0.22, 0.03, false);
-    },
-    papa(g) {
-      part(g, cap(0.32, 0.45), toon(0xb89a6a), 0, 0.6, 0);
-      part(g, SPH, toon(0xe8c4a8), 0, 1.13, 0, 0.28, 0.28, 0.28);
-      part(g, cyl(0.3, 0.3, 0.12), toon(0x3d3d48), 0, 1.35, 0); part(g, cyl(0.38, 0.38, 0.03), toon(0x3d3d48), 0, 1.3, 0.08);
-      eyes(g, 1.15, 0.26, 0.09, 0.04);
-      part(g, BOX, toon(0x16161b), 0, 0.8, 0.38, 0.4, 0.28, 0.2);
-      part(g, cyl(0.1, 0.1, 0.12, 14), toon(0x223344, 0x8fd8ff, 1.5), 0, 0.8, 0.5, 1, 1, 1, false).rotation.x = Math.PI / 2;
-    },
-    anti(g) {
-      part(g, new T.ConeGeometry(0.5, 1.4, 16), toon(0x2a1638), 0, 0.7, 0);
-      part(g, SPH, toon(0x2a1638), 0, 1.35, 0, 0.34, 0.34, 0.34);
-      part(g, SPH, toon(0x050308), 0, 1.33, 0.12, 0.25, 0.25, 0.22, false);
-      eyes(g, 1.36, 0.34, 0.09, 0.05, 0xff2f4f);
-    },
-    bot(g) {
-      part(g, new T.BoxGeometry(0.75, 0.75, 0.22), toon(0xc9ced8), 0, 0.75, 0);
-      part(g, new T.BoxGeometry(0.55, 0.55, 0.05), toon(0x7d8594), 0, 0.75, 0.12, 1, 1, 1, false);
-      eyes(g, 0.82, 0.15, 0.1, 0.05, 0xff3355);
-      for (const s of [-1, 1]) part(g, new T.ConeGeometry(0.07, 0.2, 8), toon(0xff9d2f, 0xff9d2f, 2), 0.2 * s, 0.25, 0, 1, 1, 1, false).rotation.x = Math.PI;
-    },
-    metronome(g, e) {
-      part(g, new T.ConeGeometry(1.5, 3.2, 4), toon(0xa0612f), 0, 1.6, 0).rotation.y = Math.PI / 4;
-      part(g, new T.BoxGeometry(2.4, 0.3, 2.4), toon(0xf2c14e), 0, 0.15, 0);
-      eyes(g, 1.6, 0.62, 0.3, 0.13, 0xff2f4f);
-      const pend = new T.Group(); pend.position.set(0, 0.5, 0.78); g.add(pend);
-      part(pend, new T.BoxGeometry(0.08, 2.4, 0.08), toon(0xf2c14e, 0xf2c14e, 0.4), 0, 1.2, 0);
-      part(pend, new T.BoxGeometry(0.4, 0.3, 0.15), toon(0xd0d0d8), 0, 1.6, 0);
-      e.pend = pend;
-    },
-    captain(g) {
-      part(g, cap(0.85, 0.9), toon(0x8a6a3e), 0, 1.4, 0);
-      part(g, SPH, toon(0xe8c4a8), 0, 2.65, 0, 0.6, 0.6, 0.6);
-      part(g, new T.BoxGeometry(0.85, 0.16, 0.1), toon(0x0d0d12), 0, 2.72, 0.55, 1, 1, 1, false);
-      part(g, cyl(0.85, 0.85, 0.06, 24), toon(0x26262e), 0, 3.05, 0); part(g, cyl(0.5, 0.55, 0.45, 24), toon(0x26262e), 0, 3.28, 0);
-      part(g, new T.BoxGeometry(1.0, 0.7, 0.5), toon(0x16161b), 0.3, 1.6, 0.85);
-      part(g, cyl(0.26, 0.26, 0.3, 18), toon(0x223344, 0x5ca8ff, 1.8), 0.3, 1.6, 1.15, 1, 1, 1, false).rotation.x = Math.PI / 2;
-    },
-    colossus(g, e) {
-      part(g, new T.BoxGeometry(2.2, 2.0, 1.4), toon(0x3d1f5c), 0, 2.0, 0);
-      part(g, new T.BoxGeometry(1.2, 1.0, 1.0), toon(0x3d1f5c), 0, 3.5, 0.1);
-      eyes(g, 3.55, 0.62, 0.28, 0.1, 0xff2fd0);
+    // 疲勞史萊姆：果凍身體、閉眼、黑眼圈、打哈欠、Zz
+    slime(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      part(b, SPH, toon(0x7fb4e8), 0, 0.34, 0, 0.52, 0.38, 0.52);
+      part(b, SPH, toon(0x5f93cc), 0, 0.06, 0, 0.62, 0.07, 0.62, false);
+      part(b, SPH, new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 }), -0.22, 0.55, 0.26, 0.11, 0.06, 0.04, false);
       for (const s of [-1, 1]) {
-        part(g, new T.ConeGeometry(0.15, 0.7, 8), toon(0x8a8a9a), 0.5 * s, 4.25, 0).rotation.z = -0.35 * s;
-        part(g, new T.BoxGeometry(0.6, 1.8, 0.6), toon(0x24112f), 1.45 * s, 1.7, 0);
-        part(g, new T.BoxGeometry(0.6, 1.0, 0.6), toon(0x24112f), 0.55 * s, 0.5, 0);
+        part(b, BOX, toon(0x1b2440), 0.17 * s, 0.43, 0.48, 0.13, 0.025, 0.02, false).rotation.z = -0.15 * s;
+        part(b, SPH, toon(0x5a7fb0), 0.17 * s, 0.37, 0.47, 0.08, 0.03, 0.02, false);
       }
-      e.core = part(g, SPH, toon(0xff5ce1, 0xff5ce1, 2.2), 0, 2.1, 0.72, 0.35, 0.35, 0.2, false);
+      part(b, SPH, toon(0x2b3550), 0, 0.26, 0.5, 0.06, 0.055, 0.02, false);
+      const z = (o.z = textSprite('Zz', null, '#d6ecff', 0.7)); z.position.set(0.35, 1.0, 0); g.add(z);
+      o.anim = (e, o, t) => {
+        const s = Math.sin(t * 6) * 0.07; o.body.scale.set(1 + s, 1 - s, 1 + s);
+        const k = (t * 0.5) % 1; o.z.position.y = 0.95 + k * 0.5; o.z.material.opacity = 1 - k;
+      };
+    },
+    // 酸民：灰色帽T、手機藍光照臉、頭上「!?#」對話框
+    troll(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      o.legs = legPair(b, 0x33405e, 0x1b1b24, 0.12, 0.45, 0.075);
+      part(b, cap(0.3, 0.35), toon(0x6b6b78), 0, 0.85, 0, 1, 1, 0.85);
+      part(b, BOX, toon(0x585866), 0, 0.72, 0.25, 0.32, 0.12, 0.04, false);
+      part(b, SPH, toon(0x6b6b78), 0, 1.42, -0.02, 0.37, 0.37, 0.37);
+      part(b, SPH, toon(0x22222a), 0, 1.4, 0.1, 0.3, 0.31, 0.28, false);
+      part(b, SPH, toon(0xe8c4a8, 0x5ce1ff, 0.25), 0, 1.38, 0.13, 0.25, 0.26, 0.22, false);
+      eyes(b, 1.42, 0.33, 0.08, 0.035, 0xc0182f);
+      brows(b, 1.49, 0.34, 0.08, 0.09);
+      part(b, BOX, toon(0x7a2030), 0, 1.29, 0.34, 0.1, 0.02, 0.02, false);
+      const ar = arm(b, 0.3, 1.08, 0x6b6b78, 0.28, 0.07, -1.1);
+      part(ar, BOX, toon(0x111111, 0x5ce1ff, 1.7), 0, -0.45, 0.03, 0.16, 0.26, 0.03, false);
+      o.armL = arm(b, -0.3, 1.08, 0x6b6b78, 0.28, 0.07, -0.9);
+      const bub = (o.bub = textSprite('!?#', '#ffffff', '#c0182f', 0.75)); bub.position.set(0.15, 2.1, 0); g.add(bub);
+      o.anim = (e, o, t, dt, mv) => {
+        walk(o, t, mv); o.armL.rotation.x = -0.9 + Math.sin(t * 25) * 0.12;
+        const angry = e.state === 'wind' || e.state === 'lunge';
+        o.bub.position.y = 2.1 + Math.sin(t * 3) * 0.05; o.bub.scale.setScalar(angry ? 1.0 : 0.75); o.bub.scale.y = o.bub.scale.x / 2;
+      };
+    },
+    // 狗仔：風衣、鴨舌帽、單眼相機（蓄力時閃光燈閃爍）
+    papa(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      o.legs = legPair(b, 0x4a4a55, 0x1b1b24, 0.12, 0.45, 0.075);
+      part(b, cyl(0.27, 0.38, 0.78, 16), toon(0xb89a6a), 0, 0.85, 0);
+      part(b, cyl(0.3, 0.28, 0.1, 16), toon(0x9a7e52), 0, 1.25, 0);
+      part(b, cyl(0.335, 0.335, 0.06, 16), toon(0x5a4a30), 0, 0.82, 0, 1, 1, 1, false);
+      part(b, SPH, toon(0xe8c4a8), 0, 1.5, 0, 0.27, 0.27, 0.27);
+      eyes(b, 1.53, 0.25, 0.09, 0.035);
+      part(b, BOX, toon(0x8a3040), 0, 1.4, 0.25, 0.1, 0.02, 0.02, false);
+      part(b, cyl(0.27, 0.28, 0.14, 16), toon(0x3d3d48), 0, 1.7, 0);
+      part(b, BOX, toon(0x3d3d48), 0, 1.65, 0.24, 0.32, 0.03, 0.22, false);
+      for (const s of [-1, 1]) arm(b, 0.28 * s, 1.18, 0xb89a6a, 0.22, 0.07, -1.3).rotation.z = -0.35 * s;
+      const cam = new T.Group(); cam.position.set(0, 1.25, 0.42); b.add(cam);
+      part(cam, BOX, toon(0x16161b), 0, 0, 0, 0.44, 0.28, 0.2);
+      part(cam, cyl(0.1, 0.12, 0.18, 16), toon(0x223344), 0, 0, 0.17, 1, 1, 1, false).rotation.x = Math.PI / 2;
+      part(cam, SPH, toon(0x8fd8ff, 0x8fd8ff, 1.3), 0, 0, 0.26, 0.08, 0.08, 0.03, false);
+      o.bulb = part(cam, BOX, toon(0xffffff, 0xffffff, 0.3), 0.13, 0.21, 0, 0.14, 0.09, 0.09, false);
+      o.anim = (e, o, t, dt, mv) => { walk(o, t, mv); o.bulb.material.emissiveIntensity = e.state === 'wind' ? (Math.sin(t * 40) > 0 ? 5 : 0.5) : 0.3; };
+    },
+    // 黑粉：破爛黑袍、空洞臉、紅色發光眼、紅爪、黑色氣場
+    anti(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      const robe = toon(0x3a1d52, 0x5a1a8a, 0.35);
+      part(b, new T.ConeGeometry(0.55, 1.35, 12), robe, 0, 0.78, 0);
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; part(b, new T.ConeGeometry(0.09, 0.28, 4), robe, Math.cos(a) * 0.5, 0.1, Math.sin(a) * 0.5, 1, 1, 1, false).rotation.x = Math.PI; }
+      part(b, SPH, robe, 0, 1.48, 0, 0.37, 0.39, 0.37);
+      part(b, SPH, toon(0x050308), 0, 1.45, 0.12, 0.27, 0.28, 0.25, false);
+      for (const s of [-1, 1]) part(b, SPH, toon(0xff2f4f, 0xff2f4f, 2.6), 0.1 * s, 1.48, 0.34, 0.065, 0.035, 0.02, false).rotation.z = 0.3 * s;
+      part(b, BOX, toon(0xb0102a, 0xb0102a, 1.3), 0, 1.35, 0.35, 0.15, 0.02, 0.02, false);
+      o.hands = [];
+      for (const s of [-1, 1]) {
+        const h = new T.Group(); h.position.set(0.48 * s, 0.95, 0.15); b.add(h);
+        part(h, SPH, toon(0x1a0c24), 0, 0, 0, 0.1, 0.1, 0.1);
+        for (let i = 0; i < 3; i++) part(h, new T.ConeGeometry(0.022, 0.17, 5), toon(0xff4f6a, 0xff2f4f, 1.2), (i - 1) * 0.045, -0.11, 0.04, 1, 1, 1, false).rotation.x = Math.PI;
+        o.hands.push(h);
+      }
+      const n = 26, geo = new T.BufferGeometry(), pos = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * 0.4; pos[i * 3] = Math.cos(a) * r; pos[i * 3 + 1] = Math.random() * 1.8; pos[i * 3 + 2] = Math.sin(a) * r; }
+      geo.setAttribute('position', new T.BufferAttribute(pos, 3));
+      o.aura = new T.Points(geo, new T.PointsMaterial({ color: 0xc070ff, size: 0.11, transparent: true, opacity: 0.9, blending: T.AdditiveBlending, depthWrite: false }));
+      g.add(o.aura);
+      o.anim = (e, o, t) => {
+        o.body.position.y = 0.1 + Math.sin(t * 3) * 0.08; o.body.rotation.z = Math.sin(t * 2) * 0.05;
+        o.hands.forEach((h, i) => { h.position.y = 0.95 + Math.sin(t * 4 + i * 2) * 0.08; h.rotation.x = e.state === 'wind' || e.state === 'lunge' ? -1.2 : 0; });
+        o.aura.rotation.y = t * 0.7;
+      };
+    },
+    // 假帳號 Bot：預設頭像螢幕、紅眼、天線燈、噴射火焰
+    bot(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      part(b, new T.BoxGeometry(0.8, 0.8, 0.2), toon(0xd9dee8), 0, 0.85, 0);
+      part(b, BOX, toon(0x2b3140, 0x3a4a6a, 0.5), 0, 0.85, 0.105, 0.66, 0.66, 0.01, false);
+      part(b, SPH, toon(0x9aa3b5), 0, 0.97, 0.115, 0.13, 0.13, 0.01, false);
+      part(b, SPH, toon(0x9aa3b5), 0, 0.68, 0.115, 0.23, 0.12, 0.01, false);
+      for (const s of [-1, 1]) part(b, BOX, toon(0xff3355, 0xff3355, 2.2), 0.055 * s, 0.98, 0.125, 0.045, 0.02, 0.01, false);
+      part(b, cyl(0.015, 0.015, 0.32, 6), toon(0x888888), 0, 1.4, 0);
+      o.led = part(b, SPH, toon(0xff3355, 0xff3355, 2), 0, 1.58, 0, 0.05, 0.05, 0.05, false);
+      o.flames = [];
+      for (const s of [-1, 1]) {
+        part(b, cyl(0.06, 0.09, 0.12, 10), toon(0x555a66), 0.22 * s, 0.4, 0);
+        const f = part(b, new T.ConeGeometry(0.07, 0.3, 10), toon(0xff9d2f, 0xff9d2f, 2.6), 0.22 * s, 0.2, 0, 1, 1, 1, false);
+        f.rotation.x = Math.PI; o.flames.push(f);
+      }
+      const q = textSprite('?', '#ff3355', '#ffffff', 0.45); q.position.set(0.45, 1.35, 0); g.add(q);
+      o.anim = (e, o, t) => {
+        o.body.rotation.z = Math.sin(t * 5) * 0.08;
+        o.flames.forEach((f) => { f.scale.y = 0.7 + Math.random() * 0.6; });
+        o.led.material.emissiveIntensity = Math.sin(t * 8) > 0 ? 2.6 : 0.2;
+      };
+    },
+
+    // ---------- Boss ----------
+    // 失控節拍器：木製金字塔、刻度、紅眼、擺錘；二階段發出紅光
+    metronome(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      part(b, new T.BoxGeometry(2.7, 0.35, 2.7), toon(0x5a3418), 0, 0.18, 0);
+      part(b, BOX, toon(0xf2c14e, 0xf2c14e, 0.4), 0, 0.37, 0, 2.75, 0.06, 2.75, false);
+      o.wood = toon(0xa0612f);
+      part(b, new T.ConeGeometry(1.55, 3.4, 4), o.wood, 0, 2.05, 0).rotation.y = Math.PI / 4;
+      const face = (y) => 1.096 * (1 - (y - 0.35) / 3.4) + 0.02;
+      for (let i = 0; i < 9; i++) { const y = 0.75 + i * 0.22; part(b, BOX, toon(0xf2c14e), 0, y, face(y), i % 2 ? 0.18 : 0.3, 0.03, 0.02, false); }
+      o.eyes = [];
+      for (const s of [-1, 1]) o.eyes.push(part(b, SPH, toon(0xff2f4f, 0xff2f4f, 2.2), 0.24 * s, 2.35, face(2.35), 0.14, 0.09, 0.04, false));
+      brows(b, 2.52, face(2.52) + 0.01, 0.24, 0.2, 0x3a1a08);
+      part(b, BOX, toon(0xf5f2f1), 0, 1.75, face(1.75), 0.55, 0.12, 0.03, false);
+      for (let i = -2; i <= 2; i++) part(b, BOX, toon(0x3a1a08), i * 0.11, 1.75, face(1.75) + 0.01, 0.015, 0.12, 0.01, false);
+      const pend = (o.pend = new T.Group()); pend.position.set(0, 0.6, face(0.6) + 0.05); b.add(pend);
+      part(pend, BOX, toon(0xf2c14e, 0xf2c14e, 0.5), 0, 1.35, 0, 0.08, 2.7, 0.06);
+      part(pend, BOX, toon(0xd0d0d8), 0, 1.75, 0, 0.45, 0.32, 0.16);
+      o.tip = part(pend, SPH, toon(0xffd84f, 0xffd84f, 2.5), 0, 2.75, 0, 0.09, 0.09, 0.09, false);
+      o.anim = (e, o, t) => {
+        const p2 = e.phase === 2;
+        o.pend.rotation.z = Math.sin(t * (p2 ? 9 : 5)) * 0.6;
+        o.wood.emissive.setHex(p2 ? 0xff2f2f : 0x000000); o.wood.emissiveIntensity = p2 ? 0.25 + Math.sin(t * 9) * 0.15 : 0;
+        o.body.rotation.x += ((e.state === 'charge' ? 0.18 : 0) - o.body.rotation.x) * 0.2;
+        o.eyes.forEach((m) => { m.material.emissiveIntensity = e.state === 'chargeWind' ? 4 : 2.2; });
+      };
+      o.aura = groundAura(g, 0xffb347, 2.2);
+    },
+    // 狗仔隊長：大衣、墨鏡、紳士帽、巨型相機（攻擊時閃光）、PRESS 記者證
+    captain(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      o.legs = legPair(b, 0x3a3a44, 0x111116, 0.32, 0.95, 0.17);
+      part(b, cyl(0.7, 0.98, 1.55, 22), toon(0x8a6a3e), 0, 1.65, 0);
+      part(b, cyl(0.99, 0.99, 0.1, 22), toon(0x5a4a30), 0, 1.25, 0, 1, 1, 1, false);
+      for (let i = 0; i < 3; i++) part(b, SPH, toon(0xf2c14e, 0xf2c14e, 0.4), 0, 1.45 + i * 0.3, 0.82 - i * 0.06, 0.06, 0.06, 0.03, false);
+      part(b, SPH, toon(0xe8c4a8), 0, 2.8, 0, 0.56, 0.56, 0.56);
+      part(b, SPH, toon(0xc9a78a), 0, 2.58, 0.16, 0.4, 0.24, 0.36, false);
+      part(b, BOX, toon(0x0d0d12, 0x223344, 0.3), 0, 2.87, 0.5, 0.78, 0.17, 0.08, false);
+      part(b, BOX, new T.MeshBasicMaterial({ color: 0xffffff }), -0.2, 2.9, 0.545, 0.14, 0.03, 0.01, false);
+      part(b, BOX, toon(0xffffff), 0, 2.56, 0.5, 0.3, 0.06, 0.03, false);
+      part(b, cyl(0.88, 0.88, 0.06, 26), toon(0x26262e), 0, 3.25, 0);
+      part(b, cyl(0.48, 0.56, 0.5, 26), toon(0x26262e), 0, 3.5, 0);
+      part(b, cyl(0.565, 0.565, 0.1, 26), toon(0xb3263a), 0, 3.31, 0, 1, 1, 1, false);
+      const badge = textSprite('PRESS', '#ffffff', '#16161b', 0.55); badge.position.set(-0.55, 2.05, 0.85); g.add(badge);
+      for (const s of [-1, 1]) arm(b, 0.85 * s, 2.25, 0x8a6a3e, 0.6, 0.17, -1.2).rotation.z = -0.3 * s;
+      const cam = (o.cam = new T.Group()); cam.position.set(0.3, 1.95, 1.05); b.add(cam);
+      part(cam, BOX, toon(0x16161b), 0, 0, 0, 1.15, 0.78, 0.55);
+      part(cam, cyl(0.3, 0.34, 0.5, 22), toon(0x223344), 0, 0, 0.45, 1, 1, 1, false).rotation.x = Math.PI / 2;
+      o.lens = part(cam, SPH, toon(0x5ca8ff, 0x5ca8ff, 1.8), 0, 0, 0.7, 0.24, 0.24, 0.08, false);
+      o.bulb = part(cam, BOX, toon(0xffffff, 0xffffff, 0.3), 0.3, 0.55, 0, 0.5, 0.25, 0.25, false);
+      o.anim = (e, o, t, dt, mv) => {
+        walk(o, t, mv, 7);
+        const shoot = e.state === 'aimed' || e.state === 'barrage' || e.state === 'flash';
+        o.bulb.material.emissiveIntensity = shoot ? (Math.sin(t * 30) > 0 ? 6 : 0.6) : 0.3;
+        o.lens.material.emissive.setHex(e.phase === 2 ? 0xff3355 : 0x5ca8ff);
+        o.cam.rotation.y = Math.sin(t * 1.5) * 0.15;
+      };
+      o.aura = groundAura(g, 0x5ce1ff, 2.2);
+    },
+    // 負能量巨像：紫晶岩石巨人、角、發光核心、環繞水晶；階段越高越紅
+    colossus(g, o) {
+      const b = (o.body = new T.Group()); g.add(b);
+      const rock = (o.rock = toon(0x3d1f5c)), dark = toon(0x24112f);
+      o.legs = [];
+      for (const s of [-1, 1]) {
+        const p = new T.Group(); p.position.set(0.65 * s, 1.3, 0); b.add(p);
+        part(p, new T.BoxGeometry(0.75, 1.3, 0.75), dark, 0, -0.65, 0);
+        o.legs.push(p);
+      }
+      part(b, new T.BoxGeometry(1.7, 0.5, 1.0), dark, 0, 1.4, 0);
+      part(b, new T.DodecahedronGeometry(1.25), rock, 0, 2.65, 0, 1.05, 1.0, 0.8);
+      for (const s of [-1, 1]) part(b, new T.ConeGeometry(0.22, 0.7, 6), toon(0xb070ff, 0x8a3cff, 0.8), 1.05 * s, 3.45, -0.1, 1, 1, 1, false).rotation.z = -0.7 * s;
+      part(b, new T.DodecahedronGeometry(0.58), rock, 0, 4.05, 0.1);
+      for (const s of [-1, 1]) {
+        part(b, new T.ConeGeometry(0.13, 0.85, 8), toon(0x8a8a9a), 0.42 * s, 4.65, 0, 1, 1, 1).rotation.z = -0.45 * s;
+      }
+      o.eyeM = toon(0xff2fd0, 0xff2fd0, 2.6);
+      for (const s of [-1, 1]) part(b, BOX, o.eyeM, 0.2 * s, 4.1, 0.6, 0.18, 0.07, 0.04, false).rotation.z = 0.25 * s;
+      part(b, BOX, o.eyeM, 0, 3.86, 0.6, 0.3, 0.04, 0.04, false);
+      o.arms = [];
+      for (const s of [-1, 1]) {
+        const p = new T.Group(); p.position.set(1.45 * s, 3.2, 0); b.add(p);
+        part(p, new T.BoxGeometry(0.6, 1.3, 0.6), dark, 0, -0.65, 0);
+        part(p, new T.DodecahedronGeometry(0.48), rock, 0, -1.55, 0.1);
+        for (let i = 0; i < 3; i++) part(p, new T.ConeGeometry(0.08, 0.35, 5), toon(0xb070ff, 0x8a3cff, 0.8), (i - 1) * 0.22, -1.25, 0.45, 1, 1, 1, false).rotation.x = Math.PI / 2;
+        o.arms.push(p);
+      }
+      o.coreM = toon(0xff5ce1, 0xff5ce1, 1.6);
+      o.core = part(b, SPH, o.coreM, 0, 2.75, 1.0, 0.38, 0.38, 0.2, false);
+      o.halo = new T.Mesh(SPH, glow(0xff5ce1, 0.12)); o.halo.position.set(0, 2.75, 1.0); b.add(o.halo);
+      o.shards = new T.Group(); o.shards.position.y = 2.7; g.add(o.shards);
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        part(o.shards, new T.OctahedronGeometry(0.22), toon(0xd9a8ff, 0xb070ff, 1.5), Math.cos(a) * 2.3, Math.sin(i * 1.7) * 0.6, Math.sin(a) * 2.3, 1, 1.6, 1, false);
+      }
+      o.aura = groundAura(g, 0xff2fd0, 2.6);
+      o.anim = (e, o, t, dt, mv) => {
+        walk(o, t, mv, 5);
+        o.arms.forEach((a, i) => { a.rotation.x = mv ? Math.sin(t * 5 + i * Math.PI) * 0.4 : Math.sin(t * 1.5 + i) * 0.1; });
+        const col = e.phase === 3 ? 0xff2850 : e.phase === 2 ? 0xff5ce1 : 0xc58fff;
+        o.coreM.emissive.setHex(col); o.coreM.color.setHex(col); o.eyeM.emissive.setHex(col);
+        o.halo.material.color.setHex(col); o.aura.material.color.setHex(col);
+        const p = 1 + Math.sin(t * (3 + e.phase * 2)) * 0.18;
+        o.core.scale.set(0.38 * p, 0.38 * p, 0.2 * p); o.halo.scale.setScalar(0.48 * p);
+        o.shards.rotation.y = t * (0.6 + e.phase * 0.4);
+        o.rock.emissive.setHex(e.phase === 3 ? 0x5a0a20 : 0x000000); o.rock.emissiveIntensity = e.phase === 3 ? 0.6 : 0;
+      };
     },
   };
   function makeEnemy(e) {
     const g = new T.Group(), o = { root: g, mats: [] };
     (ENEMY[e.type] || ENEMY.slime)(g, o);
-    g.traverse((n) => { if (n.isMesh && n.material.isMeshToonMaterial) { const mt = n.material; mt.userData.em = mt.emissive.getHex(); mt.userData.ei = mt.emissiveIntensity; o.mats.push(mt); } });
+    g.traverse((n) => { if (n.isMesh && n.material.isMeshToonMaterial) { const mt = n.material; if (!o.mats.includes(mt)) { mt.userData.em = mt.emissive.getHex(); mt.userData.ei = mt.emissiveIntensity; o.mats.push(mt); } } });
     if (e.boss) g.scale.setScalar(1.1);
     return o;
   }
@@ -436,9 +651,10 @@
         o.flashing = flash;
         for (const mt of o.mats) { mt.emissive.setHex(flash ? 0xffffff : mt.userData.em); mt.emissiveIntensity = flash ? 0.9 : mt.userData.ei; }
       }
-      if (e.type === 'slime') { const s = Math.sin(e.t * 6) * 0.06; o.root.scale.set(1 + s, 1 - s, 1 + s); }
-      if (o.pend) o.pend.rotation.z = Math.sin(e.t * (e.phase === 2 ? 9 : 5)) * 0.6;
-      if (o.core) o.core.scale.setScalar(0.35 * (1 + Math.sin(e.t * 5) * 0.15));
+      const mv = o.px != null && Math.hypot(e.x - o.px, e.y - o.py) > 0.15;
+      o.px = e.x; o.py = e.y;
+      if (o.anim) o.anim(e, o, e.t, dt, mv);
+      if (o.aura) { o.aura.visible = !e.boss || e.active; o.aura.rotation.z = e.t * 0.5; }
       // 衝鋒預警
       if (e.tele && e.tele.type === 'line') {
         if (!o.tele) { o.tele = new T.Mesh(new T.PlaneGeometry(1, 1), glow(0xff2850, 0.3)); o.tele.rotation.x = -Math.PI / 2; scene.add(o.tele); }
@@ -459,13 +675,20 @@
     // 地面危險
     sync(run.hazards, objs.hazards, (h) => {
       const g = new T.Group(); g.rotation.x = -Math.PI / 2; g.position.y = 0.06;
-      if (h.type === 'ring') { const r = new T.Mesh(new T.RingGeometry(0.9, 1, 64), glow(new T.Color(h.color).getHex(), 0.85)); g.add(r); return { root: g, a: r }; }
-      const a = new T.Mesh(new T.CircleGeometry(1, 40), glow(0xff2850, 0.22)), b = new T.Mesh(new T.CircleGeometry(1, 40), glow(0xff2850, 0.35)), c = new T.Mesh(new T.RingGeometry(0.95, 1, 48), glow(0xff2850, 0.9));
-      g.add(a, b, c); return { root: g, a, b, c };
+      if (h.type === 'ring') {
+        const c = new T.Color(h.color).getHex();
+        const r = new T.Mesh(new T.RingGeometry(0.88, 1, 64), glow(c, 0.9)); g.add(r);
+        const wall = new T.Mesh(new T.CylinderGeometry(1, 1, 0.6, 64, 1, true), glow(c, 0.35)); wall.rotation.x = Math.PI / 2; wall.position.z = 0.3; g.add(wall);
+        return { root: g, a: r };
+      }
+      const a = new T.Mesh(new T.CircleGeometry(1, 40), glow(0xff2850, 0.22)), b = new T.Mesh(new T.CircleGeometry(1, 40), glow(0xff2850, 0.35)), c = new T.Mesh(new T.RingGeometry(0.93, 1, 48), glow(0xff2850, 0.9));
+      const beam = new T.Mesh(new T.CylinderGeometry(1, 1, 3, 32, 1, true), glow(0xff2850, 0.12)); beam.rotation.x = Math.PI / 2; beam.position.z = 1.5;
+      g.add(a, b, c, beam); return { root: g, a, b, c, beam };
     }, (h, o) => {
       o.root.position.x = h.x * K; o.root.position.z = h.y * K;
-      if (h.type === 'ring') { o.root.scale.setScalar(Math.max(0.01, h.r * K)); return; }
-      const r = h.r * K; o.a.scale.setScalar(r); o.c.scale.setScalar(r);
+      if (h.type === 'ring') { const r = Math.max(0.01, h.r * K); o.root.scale.set(r, r, 1); o.root.children.forEach((c) => { c.material.opacity = (c === o.a ? 0.9 : 0.35) * Math.max(0, 1 - h.r / h.max); }); return; }
+      const r = h.r * K; o.a.scale.setScalar(r); o.c.scale.setScalar(r); o.beam.scale.set(r, 1, r);
+      o.c.material.opacity = 0.6 + Math.sin(h.t * 25) * 0.3; o.beam.visible = !h.done;
       if (!h.done) { o.b.scale.setScalar(Math.max(0.01, r * Math.min(1, h.t / h.tele))); }
       else { o.b.scale.setScalar(r); o.b.material.color.setHex(0xffffff); o.b.material.opacity = Math.max(0, 1 - (h.t - h.tele) / 0.25) * 0.8; o.a.visible = o.c.visible = false; }
     });
