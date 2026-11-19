@@ -40,7 +40,7 @@
             const fromA = f.dir > 0 ? a0 : f.ang + f.half - sweep;
             ctx.globalAlpha = 1 - p * 0.8;
             ctx.lineCap = 'round';
-            ctx.strokeStyle = '#ff8fd0'; ctx.lineWidth = 5 * (1 - p) + 1;
+            ctx.strokeStyle = f.color || '#ff8fd0'; ctx.lineWidth = 5 * (1 - p) + 1;
             ctx.beginPath(); ctx.arc(f.x, f.y, f.r - 4, fromA, fromA + sweep); ctx.stroke();
             ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
             ctx.beginPath(); ctx.arc(f.x, f.y, f.r - 6, fromA, fromA + sweep); ctx.stroke();
@@ -58,6 +58,16 @@
           case 'ghost':
             ctx.globalAlpha = 0.45 * (1 - p);
             G.Sprites.draw(ctx, f.sprite, f.x, f.y, { flip: f.flip });
+            break;
+          case 'beam':
+            ctx.globalAlpha = 1 - p; ctx.strokeStyle = f.color; ctx.lineWidth = f.w * (1 - p * 0.6); ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(f.x, f.y); ctx.lineTo(f.x + Math.cos(f.ang) * f.len, f.y + Math.sin(f.ang) * f.len); ctx.stroke();
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            break;
+          case 'strike':
+            ctx.globalAlpha = 1 - p; ctx.strokeStyle = f.color; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (p < 0.5 ? 1 : 1 + (p - 0.5)), 0, U.TAU); ctx.stroke();
+            ctx.fillStyle = f.color; ctx.fillRect(f.x - 1.5, f.y - 40 * (1 - Math.min(1, p * 2)), 3, 40 * (1 - Math.min(1, p * 2)));
             break;
           case 'ringfx':
             ctx.globalAlpha = 1 - p; ctx.strokeStyle = f.color; ctx.lineWidth = 2;
@@ -256,7 +266,7 @@
       if (len) {
         P.face = Math.atan2(my, mx);
         if (Math.abs(mx) > 0.1) P.lr = mx > 0 ? 1 : -1;
-        const sp = st.spd * (P.spin ? 0.75 : 1) * (P.atk.anim > 0 ? 0.5 : 1);
+        const sp = st.spd * (P.spin ? P.spin.spd : 1) * (P.atk.anim > 0 ? 0.5 : 1);
         G.World.move(map, P, mx * sp * dt, my * sp * dt);
         P.anim += dt;
       }

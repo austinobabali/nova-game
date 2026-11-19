@@ -48,7 +48,7 @@
   // ---------- 場景 ----------
   function newRun(map, mode, zone) {
     return {
-      map, mode, zone, enemies: [], projs: [], hazards: [], pickups: [], fx: [],
+      map, mode, zone, enemies: [], projs: [], hazards: [], pickups: [], fx: [], pprojs: [], skq: [],
       cam: { x: map.spawn.x, y: map.spawn.y }, shake: 0, hitstop: 0, flash: 0, flashColor: '#fff',
       spawnT: 3, boss: null, banner: null, time: 0, victoryT: 0, over: false, interact: null,
     };
@@ -77,6 +77,7 @@
     newGame() {
       G.S = G.newState();
       G.S.hero = D.heroOrder[G.heroIdx];
+      G.applyHeroSkills(G.S.hero);
       G.Player.init();
       this.enterHub();
       G.UI.close();
@@ -88,6 +89,7 @@
       if (!s) { this.newGame(); return; }
       G.S = s;
       G.S.hero = D.heroOrder[G.heroIdx];
+      G.applyHeroSkills(G.S.hero);
       G.Player.init();
       this.enterHub();
       G.UI.close();
@@ -260,6 +262,7 @@
       for (const n of run.map.npcs) list.push({ y: n.y, f: () => drawNpc(n, run.time) });
       list.sort((a, b) => a.y - b.y).forEach((o) => o.f());
       G.Enemies.renderProjs(ctx);
+      G.Skills.render2D(ctx);
       G.FX.render(ctx);
       if (run.interact && !run.over) {
         const it = run.interact, bob = Math.round(Math.sin(run.time * 6));

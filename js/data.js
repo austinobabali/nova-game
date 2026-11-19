@@ -73,29 +73,35 @@ window.G = window.G || {};
   U.itemValue = (it) => it.price || (it.rarity === 'legendary' ? 2500 : 300 * Math.max(1, it.tier));
   U.sellPrice = (it) => Math.floor(U.itemValue(it) * 0.4);
 
-  // ---------- 技能 ----------
-  const skills = {
-    wave: {
-      name: '音波衝擊', short: '音波', key: 'K', code: 'KeyK', unlock: 1, mp: 10,
-      cd: (l) => 3.2 - 0.2 * l, mult: (l) => 1.6 + 0.4 * l, range: (l) => 56 + 6 * l,
-      desc: '向前方釋放扇形音波，造成傷害並擊退敵人',
+  // ---------- 技能（三位主角各自一套；按鍵/解鎖等級/升級進度共用） ----------
+  const SLOT = { wave: ['K', 'KeyK', 1], spin: ['L', 'KeyL', 3], dash: ['U', 'KeyU', 5], encore: ['I', 'KeyI', 8] };
+  const heroSkills = {
+    amira: {
+      wave: { name: '疾風連爪', short: '連爪', type: 'cone', mp: 8, cd: (l) => 2.6 - 0.15 * l, mult: (l) => 0.8 + 0.2 * l, range: (l) => 34 + 3 * l, half: 0.9, hits: 3, gap: 0.09, desc: '向前方高速連續爪擊 3 次' },
+      spin: { name: '旋身迴斬', short: '迴斬', type: 'spin', mp: 16, cd: (l) => 7.5 - 0.5 * l, mult: (l) => 0.45 + 0.12 * l, range: (l) => 28 + 3 * l, dur: 1.4, tick: 0.14, spd: 1.0, desc: '高速旋轉連斬周圍敵人，移動不減速' },
+      dash: { name: '影步突襲', short: '影步', type: 'dash', mp: 10, cd: (l) => 4.4 - 0.3 * l, mult: (l) => 1.8 + 0.45 * l, range: (l) => 100 + 12 * l, desc: '化為殘影高速突進（無敵），穿透路徑上的敵人' },
+      encore: { name: '千爪亂舞', short: '亂舞', type: 'ult', mp: 45, cd: (l) => 32 - 2 * l, mult: (l) => 1.0 + 0.4 * l, hits: 6, gap: 0.08, style: 'claw', desc: '畫面內所有敵人遭受 6 連爪擊，並短暫無敵' },
     },
-    spin: {
-      name: '應援棒旋風', short: '旋風', key: 'L', code: 'KeyL', unlock: 3, mp: 18,
-      cd: (l) => 8.5 - 0.5 * l, mult: (l) => 0.55 + 0.15 * l, range: (l) => 30 + 3 * l,
-      desc: '旋轉應援棒 1.6 秒，持續傷害周圍所有敵人',
+    luna: {
+      wave: { name: '月光斬', short: '月光', type: 'proj', mp: 10, cd: (l) => 3.0 - 0.2 * l, mult: (l) => 1.7 + 0.4 * l, range: (l) => 120 + 15 * l, speed: 260, desc: '揮出新月劍氣，貫穿直線上的所有敵人' },
+      spin: { name: '劍氣旋風', short: '旋風', type: 'spin', mp: 18, cd: (l) => 8.5 - 0.5 * l, mult: (l) => 0.55 + 0.15 * l, range: (l) => 34 + 4 * l, dur: 1.6, tick: 0.22, spd: 0.75, desc: '旋轉長劍形成劍氣旋風，持續傷害周圍敵人' },
+      dash: { name: '星落突刺', short: '突刺', type: 'dash', mp: 12, cd: (l) => 5.3 - 0.3 * l, mult: (l) => 2 + 0.5 * l, range: (l) => 80 + 10 * l, blast: (l) => 30 + 3 * l, desc: '突進（無敵）後在終點引發星光爆炸' },
+      encore: { name: '安可・月蝕', short: '月蝕', type: 'ult', mp: 45, cd: (l) => 34 - 2 * l, mult: (l) => 4 + 1.5 * l, hits: 1, style: 'moon', desc: '全場月光爆發，畫面內敵人受到巨大傷害，並短暫無敵' },
     },
-    dash: {
-      name: '舞步突進', short: '突進', key: 'U', code: 'KeyU', unlock: 5, mp: 12,
-      cd: (l) => 5.3 - 0.3 * l, mult: (l) => 2 + 0.5 * l, range: (l) => 80 + 10 * l,
-      desc: '朝面向高速突進（無敵），穿透並傷害路徑上的敵人',
-    },
-    encore: {
-      name: '安可大絕', short: '安可', key: 'I', code: 'KeyI', unlock: 8, mp: 45,
-      cd: (l) => 34 - 2 * l, mult: (l) => 4 + 1.5 * l, range: () => 300,
-      desc: '全場應援爆發！畫面內所有敵人受到巨大傷害，並短暫無敵',
+    rosa: {
+      wave: { name: '破曉突刺', short: '突刺', type: 'line', mp: 10, cd: (l) => 3.0 - 0.2 * l, mult: (l) => 1.9 + 0.45 * l, range: (l) => 80 + 8 * l, width: 12, desc: '光槍向前直線貫穿，射程極長' },
+      spin: { name: '流星槍舞', short: '流星', type: 'rain', mp: 20, cd: (l) => 9 - 0.5 * l, mult: (l) => 0.75 + 0.2 * l, range: (l) => 60 + 5 * l, count: (l) => 6 + l, radius: 22, desc: '召喚光槍如流星般落向周圍的敵人' },
+      dash: { name: '聖光貫穿', short: '貫穿', type: 'dash', mp: 12, cd: (l) => 5.5 - 0.3 * l, mult: (l) => 2.2 + 0.5 * l, range: (l) => 110 + 12 * l, desc: '持槍長距離突進（無敵），貫穿路徑上的敵人' },
+      encore: { name: '天光審判', short: '審判', type: 'ult', mp: 48, cd: (l) => 34 - 2 * l, mult: (l) => 4.5 + 1.6 * l, hits: 1, style: 'pillar', desc: '天降光柱審判畫面內所有敵人，並短暫無敵' },
     },
   };
+  const skills = {};
+  G.applyHeroSkills = function (hero) {
+    const set = heroSkills[hero] || heroSkills.luna;
+    for (const k in SLOT) skills[k] = Object.assign({ key: SLOT[k][0], code: SLOT[k][1], unlock: SLOT[k][2] }, set[k]);
+    if (G.Touch && G.Touch.refresh) G.Touch.refresh();
+  };
+  G.applyHeroSkills('luna');
 
   // ---------- 怪物 ----------
   const enemies = {
@@ -145,6 +151,6 @@ window.G = window.G || {};
     rarityName: { common: '普通', rare: '稀有', legendary: '傳說' },
     rarityColor: { common: '#e8e0dc', rare: '#4fb3ff', legendary: '#ffb347' },
     slotName: { weapon: '應援棒', armor: '舞台服', acc: '飾品' },
-    items, skills, skillOrder: ['wave', 'spin', 'dash', 'encore'], enemies, zones,
+    items, skills, heroSkills, skillOrder: ['wave', 'spin', 'dash', 'encore'], enemies, zones,
   };
 })();

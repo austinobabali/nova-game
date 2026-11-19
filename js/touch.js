@@ -33,7 +33,8 @@
       <span class="lbl">${b.label}</span>${b.skill ? '<span class="cdv"></span><span class="cdt"></span>' : ''}${b.cls === 'pot' ? '<span class="cnt"></span>' : ''}</button>`).join('')}</div>`;
 
   // 技能按鈕顯示技能名
-  el.querySelectorAll('[data-skill]').forEach((b) => { b.querySelector('.lbl').textContent = D.skills[b.dataset.skill].short; });
+  const refreshLabels = () => el.querySelectorAll('[data-skill]').forEach((b) => { b.querySelector('.lbl').textContent = D.skills[b.dataset.skill].short; });
+  refreshLabels();
 
   // ---------- 按鈕 ----------
   el.querySelectorAll('.tbtn').forEach((b) => {
@@ -84,6 +85,7 @@
   const interactBtn = el.querySelector('.b-interact');
   let lastKey = '';
   G.Touch = {
+    refresh: refreshLabels,
     update() {
       const show = G.isTouch && G.Game.scene === 'play' && !G.UI.open && G.run && !G.run.over && !G.portraitBlocked;
       el.classList.toggle('show', !!show);

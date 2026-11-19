@@ -9,7 +9,7 @@
   let T, renderer, scene, camera, composer, gradMap, outlineMat, SPH, BOX;
   let selGroup, selHeroes = [], world = null, curMap = null, player = null, playerId = '';
   let sun, last = performance.now(), sparks = null;
-  const objs = { enemies: new Map(), projs: new Map(), hazards: new Map(), pickups: new Map(), fx: new Map() };
+  const objs = { enemies: new Map(), projs: new Map(), hazards: new Map(), pickups: new Map(), fx: new Map(), pprojs: new Map() };
   const bg = {};
 
   // ---------- 小工具 ----------
@@ -617,6 +617,64 @@
   const PROJ_GEO = () => { const g = new T.SphereGeometry(1, 10, 8); g.userData.shared = true; return g; };
   let projGeo, coinGeo, gemGeo;
 
+  // ---------- 技能特效（3D） ----------
+  const flat = (geo, col, op, y) => { const m = new T.Mesh(geo, glow(col, op)); m.rotation.x = -Math.PI / 2; if (y != null) m.position.y = y; return m; };
+  const FX3D = {
+    slash: {
+      make(f, c) { const m = flat(new T.RingGeometry(0.55, 1, 40, 1, -f.half, f.half * 2), c, 0.85); m.position.set(f.x * K, 0.55, (f.y + 4) * K); m.rotation.z = -f.ang; m.scale.setScalar(f.r * K); return { root: m }; },
+      upd(f, o, p) { o.root.material.opacity = 0.85 * (1 - p); },
+    },
+    wave: {
+      make(f, c) { const m = flat(new T.RingGeometry(0.2, 1, 40, 1, -f.half, f.half * 2), c, 0.8); m.position.set(f.x * K, 0.5, (f.y + 3) * K); m.rotation.z = -f.ang; return { root: m }; },
+      upd(f, o, p) { o.root.scale.setScalar(Math.max(0.01, f.r * K * Math.min(1, p * 1.4))); o.root.material.opacity = 0.8 * (1 - p); },
+    },
+    ringfx: {
+      make(f, c) { const m = flat(new T.RingGeometry(0.85, 1, 64), c, 0.8); m.position.set(f.x * K, 0.08, (f.y + 4) * K); return { root: m }; },
+      upd(f, o, p) { o.root.scale.setScalar(Math.max(0.01, (f.r * p + 2) * K)); o.root.material.opacity = 0.8 * (1 - p); },
+    },
+    beam: {
+      make(f, c) {
+        const g = new T.Group();
+        const a = flat(new T.PlaneGeometry(1, 1), c, 0.75), b = flat(new T.PlaneGeometry(1, 0.35), 0xffffff, 0.9, 0.01);
+        g.add(a, b);
+        g.position.set((f.x + Math.cos(f.ang) * f.len / 2) * K, 0.6, (f.y + 3 + Math.sin(f.ang) * f.len / 2) * K);
+        g.rotation.y = -f.ang; g.scale.set(f.len * K, 1, f.w * K * 2);
+        const tip = new T.Mesh(new T.ConeGeometry(0.4, 1.2, 8), glow(c, 0.85));
+        tip.rotation.z = -Math.PI / 2;
+        tip.position.set((f.x + Math.cos(f.ang) * f.len) * K, 0.6, (f.y + 3 + Math.sin(f.ang) * f.len) * K);
+        const holder = new T.Group(); holder.add(g);
+        const tg = new T.Group(); tg.position.copy(tip.position); tg.rotation.y = -f.ang; tip.position.set(0, 0, 0); tg.add(tip); holder.add(tg);
+        return { root: holder, a, b, tip, g };
+      },
+      upd(f, o, p) {
+        o.a.material.opacity = 0.75 * (1 - p); o.b.material.opacity = 0.9 * (1 - p); o.tip.material.opacity = 0.85 * (1 - p);
+        o.g.scale.z = f.w * K * 2 * (1 - p * 0.7);
+      },
+    },
+    strike: {
+      make(f, c) {
+        const g = new T.Group(); g.position.set(f.x * K, 0, f.y * K);
+        const ring = flat(new T.RingGeometry(0.8, 1, 40), c, 0.9, 0.06); ring.scale.setScalar(f.r * K); g.add(ring);
+        const disc = flat(new T.CircleGeometry(1, 32), c, 0.25, 0.05); disc.scale.setScalar(f.r * K); g.add(disc);
+        const h = f.big ? 9 : 5;
+        const spear = new T.Mesh(new T.CylinderGeometry(f.big ? 0.55 : 0.09, f.big ? 0.55 : 0.02, h, 10, 1, !!f.big), glow(f.big ? c : 0xffffff, 0.9));
+        g.add(spear);
+        return { root: g, ring, disc, spear, h };
+      },
+      upd(f, o, p) {
+        const fall = Math.min(1, p / 0.45);
+        o.spear.position.y = o.h / 2 + (1 - fall) * 6;
+        o.spear.material.opacity = f.big ? 0.55 * (1 - p) : (p < 0.5 ? 0.95 : 0.95 * (1 - (p - 0.5) * 2));
+        o.ring.scale.setScalar(f.r * K * (p < 0.5 ? 1 : 1 + (p - 0.5) * 1.5)); o.ring.material.opacity = 0.9 * (1 - p);
+        o.disc.material.opacity = (p > 0.45 && p < 0.65 ? 0.7 : 0.25) * (1 - p);
+      },
+    },
+    ghost: {
+      make(f, c) { const m = new T.Mesh(cap(0.25, 0.8), glow(c, 0.35)); m.position.set(f.x * K, 0.75, f.y * K); return { root: m }; },
+      upd(f, o, p) { o.root.material.opacity = 0.35 * (1 - p); o.root.scale.setScalar(1 - p * 0.3); },
+    },
+  };
+
   function renderGame(dt) {
     const run = G.run, P = G.P, S = G.S, t = run.time;
     if (run.map !== curMap) buildWorld(run.map);
@@ -701,21 +759,31 @@
       return { root: g };
     }, (p, o) => { o.root.position.set(p.x * K, 0.35 + Math.sin(t * 4 + p.x) * 0.08, p.y * K); o.root.rotation.y += dt * 3; });
     // 攻擊/技能特效
-    sync(run.fx.filter((f) => f.type === 'slash' || f.type === 'wave' || f.type === 'ringfx'), objs.fx, (f) => {
-      let geo;
-      if (f.type === 'ringfx') geo = new T.RingGeometry(0.85, 1, 64);
-      else geo = new T.RingGeometry(f.type === 'wave' ? 0.2 : 0.55, 1, 40, 1, -f.half, f.half * 2);
-      const col = f.type === 'slash' ? (HERO[S.hero] || HERO.luna).ring : f.type === 'wave' ? 0x5ce1ff : new T.Color(f.color).getHex();
-      const mesh = new T.Mesh(geo, glow(col, 0.8)); mesh.rotation.x = -Math.PI / 2; mesh.position.set(f.x * K, f.type === 'ringfx' ? 0.08 : 0.55, (f.y + 4) * K);
-      if (f.type !== 'ringfx') mesh.rotation.z = -f.ang;
-      return { root: mesh };
-    }, (f, o) => {
-      const p = f.t / f.life;
-      if (f.type === 'ringfx') o.root.scale.setScalar(Math.max(0.01, (f.r * p + 2) * K));
-      else if (f.type === 'wave') o.root.scale.setScalar(Math.max(0.01, f.r * K * Math.min(1, p * 1.4)));
-      else o.root.scale.setScalar(f.r * K);
-      o.root.material.opacity = 0.85 * (1 - p);
-    });
+    const heroRing = (HERO[S.hero] || HERO.luna).ring;
+    const colOf = (f) => (f.color ? new T.Color(f.color).getHex() : heroRing);
+    sync(run.fx.filter((f) => FX3D[f.type]), objs.fx, (f) => FX3D[f.type].make(f, colOf(f)), (f, o) => FX3D[f.type].upd(f, o, f.t / f.life));
+    // 月光斬劍氣
+    sync(run.pprojs, objs.pprojs, (p) => {
+      const g = new T.Group();
+      const c = new T.Color(p.color).getHex();
+      const m = new T.Mesh(new T.RingGeometry(0.55, 1, 28, 1, -1.15, 2.3), glow(c, 0.9)); m.rotation.x = -Math.PI / 2; g.add(m);
+      const w = new T.Mesh(new T.RingGeometry(0.85, 0.95, 28, 1, -1.0, 2.0), glow(0xffffff, 0.9)); w.rotation.x = -Math.PI / 2; w.position.y = 0.01; g.add(w);
+      g.scale.setScalar(p.r * K * 1.3); g.rotation.y = -p.ang;
+      return { root: g };
+    }, (p, o) => { o.root.position.set(p.x * K, 0.55, (p.y + 3) * K); o.root.children[0].material.opacity = Math.min(0.9, p.life / 0.12); });
+    // 旋風光環
+    if (P.spin) {
+      if (!R.spinFx) {
+        const g = new T.Group();
+        g.add(new T.Mesh(new T.TorusGeometry(1, 0.05, 8, 48), glow(heroRing, 0.85)));
+        g.add(new T.Mesh(new T.CircleGeometry(1, 40), glow(heroRing, 0.18)));
+        for (let i = 0; i < 3; i++) g.add(new T.Mesh(new T.RingGeometry(0.7, 1, 16, 1, i * 2.1, 0.9), glow(0xffffff, 0.7)));
+        g.rotation.x = -Math.PI / 2; scene.add(g); R.spinFx = g;
+      }
+      R.spinFx.visible = true;
+      R.spinFx.children[0].material.color.setHex(heroRing); R.spinFx.children[1].material.color.setHex(heroRing);
+      R.spinFx.scale.setScalar(P.spin.R * K); R.spinFx.position.set(P.x * K, 0.5, P.y * K); R.spinFx.rotation.z += dt * 14;
+    } else if (R.spinFx) R.spinFx.visible = false;
     // 光點
     if (sparks) { const a = sparks.geometry.attributes.position; for (let i = 0; i < a.count; i++) { let y = a.getY(i) + dt * 0.3; if (y > 3) y = 0; a.setY(i, y); } a.needsUpdate = true; }
     // 鏡頭
@@ -754,6 +822,7 @@
   function renderTitle(dt) {
     if (world) world.visible = false;
     if (player) player.root.visible = false;
+    if (R.spinFx) R.spinFx.visible = false;
     for (const k in objs) objs[k].forEach((o) => { o.root.visible = false; });
     selGroup.visible = true;
     scene.background = bg.title;
