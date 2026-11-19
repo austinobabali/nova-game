@@ -19,7 +19,8 @@ html, body {
 }
 body { position: fixed; inset: 0; }
 #wrap { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-#game { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+#gl { position: absolute; inset: 0; display: block; }
+#game { position: relative; display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
 
 /* ---------- UI overlay ---------- */
 #ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; font-size: var(--fs); }
@@ -115,13 +116,20 @@ table.keys td:first-child { width: 42%; }
 .tab.on { color: #fff; background: var(--brand); border-color: var(--brand); }
 
 /* ---------- 標題 ---------- */
-.title-screen { text-align: center; margin-top: -4%; padding: 0 1em; }
+.title-screen { text-align: center; padding: 3% 1em 2%; height: 100%; width: 100%; display: flex; flex-direction: column; justify-content: space-between; align-items: center; pointer-events: none; }
+.title-screen > * { pointer-events: auto; }
+.title-screen .top { pointer-events: none; }
+.hero-pick { display: flex; align-items: center; justify-content: center; gap: .8em; margin-bottom: .6em; font-size: max(13px, calc(var(--u) * 7.5)); }
+.hero-pick .arrow { width: 2.4em; height: 2.4em; border-radius: 50%; border: 2px solid var(--gold); background: rgba(20,14,60,.7); color: var(--gold); font-size: 1.2em; font-weight: 900; cursor: pointer; line-height: 1; }
+.hp-info { min-width: 8em; display: flex; flex-direction: column; text-shadow: 0 2px 0 #000; }
+.hp-info b { font-size: 1.4em; letter-spacing: .08em; }
+.hp-info small { color: #9fe6ff; font-weight: 700; }
 .logo { font-family: "Press Start 2P", monospace; font-size: calc(var(--u) * 34); color: #fff; letter-spacing: .08em;
   text-shadow: 0 0 0 #000, 4px 4px 0 var(--brand), 0 0 24px rgba(255, 111, 181, .7); }
 .logo-sub { font-weight: 900; font-size: calc(var(--u) * 16); color: var(--pink); letter-spacing: .4em; margin: .2em 0 .4em; text-shadow: 2px 2px 0 #000; }
 .tagline { font-size: var(--fs); color: #fff; opacity: .9; margin-bottom: 1.2em; text-shadow: 1px 1px 0 #000; }
 .title-screen .menu { display: flex; gap: .6em; justify-content: center; flex-wrap: wrap; font-size: max(13px, calc(var(--u) * 7.5)); }
-.title-screen .foot { margin-top: 1.4em; font-size: .75em; color: var(--muted); }
+.title-screen .foot { margin-top: .6em; font-size: .75em; color: var(--muted); }
 
 /* ---------- Toast ---------- */
 #toasts { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: .35em; pointer-events: none; font-size: var(--fs); width: 90%; z-index: 5; }

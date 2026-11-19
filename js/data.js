@@ -117,7 +117,15 @@ window.G = window.G || {};
     3: { id: 3, name: '年末頒獎舞台', theme: 'stage', enemies: ['anti', 'bot'], boss: 'colossus', lv: '建議 Lv 10+', count: 18, tier: 3, music: 'stage', color: '#ffd84f' },
   };
 
+  // ---------- 主角（普攻差異；技能暫時共用） ----------
+  const heroes = {
+    amira: { name: 'AMIRA', role: '先鋒・爪刃', range: 22, arc: 2.4, cdMul: 0.78, multMul: 0.9 },
+    luna: { name: 'LUNA', role: '劍士・長劍', range: 27, arc: 2.5, cdMul: 1, multMul: 1 },
+    rosa: { name: 'ROSA', role: '槍兵・光槍', range: 36, arc: 1.0, cdMul: 1.15, multMul: 1.12 },
+  };
+
   G.DATA = {
+    heroes, heroOrder: ['amira', 'luna', 'rosa'],
     base: { hp: 100, mp: 50, atk: 10, def: 2, spd: 72, crit: 0.05, critDmg: 1.6 },
     perLevel: { hp: 12, mp: 5, atk: 2, def: 1 },
     maxLevel: 30,

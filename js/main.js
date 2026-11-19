@@ -25,6 +25,7 @@
     canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
     wrap.style.width = cw + 'px'; wrap.style.height = ch + 'px';
     G.scale = (cw * dpr) / G.W;
+    if (G.use3D) G.R3D.resize(cw, ch, dpr);
     document.documentElement.style.setProperty('--u', s + 'px');
   }
   window.addEventListener('resize', resize);
@@ -75,6 +76,7 @@
     toTitle() { this.scene = 'title'; G.run = null; G.UI.show('title'); G.Audio.music('hub'); },
     newGame() {
       G.S = G.newState();
+      G.S.hero = D.heroOrder[G.heroIdx];
       G.Player.init();
       this.enterHub();
       G.UI.close();
@@ -85,6 +87,7 @@
       const s = G.Save.load();
       if (!s) { this.newGame(); return; }
       G.S = s;
+      G.S.hero = D.heroOrder[G.heroIdx];
       G.Player.init();
       this.enterHub();
       G.UI.close();
@@ -236,6 +239,7 @@
     },
 
     render() {
+      if (G.use3D) { render3D(); return; }
       const W = G.W, H = G.H;
       ctx.setTransform(G.scale, 0, 0, G.scale, 0, 0);
       ctx.imageSmoothingEnabled = false;
@@ -358,7 +362,68 @@
     requestAnimationFrame(frame);
   }
 
-  resize();
-  Game.toTitle();
-  requestAnimationFrame(frame);
+  // ---------- 3D 覆蓋層：名稱、血條、傷害數字（投影到 HUD 畫布） ----------
+  function render3D() {
+    G.R3D.render();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(G.scale, 0, 0, G.scale, 0, 0);
+    if (Game.scene === 'title' || !G.run) return;
+    const run = G.run, R = G.R3D, t = run.time, UI = G.UI;
+    for (const n of run.map.npcs) {
+      const p = R.project(n.x, n.y, 2.0);
+      if (!p) continue;
+      UI.txt(ctx, n.name, p.x, p.y, { align: 'center', font: UI.TC(7), lw: 2 });
+      if (n.id === 'trainer' && G.S.attrPts + G.S.skillPts > 0) UI.txt(ctx, '!', p.x + 14, p.y - 8 + Math.sin(t * 6) * 2, { align: 'center', font: UI.PX(8), color: '#7dff9a' });
+    }
+    for (const pt of run.map.portals) {
+      if (pt.toHub) continue;
+      const z = D.zones[pt.zone], locked = pt.zone > G.S.unlocked, p = R.project(pt.x, pt.y + 12, 0);
+      if (!p) continue;
+      UI.txt(ctx, z.name + (G.S.defeated.includes(pt.zone) ? ' ★' : ''), p.x, p.y, { align: 'center', font: UI.TC(7), color: locked ? '#aaa' : z.color, lw: 2 });
+      UI.txt(ctx, locked ? '未解鎖' : z.lv, p.x, p.y + 10, { align: 'center', font: UI.TC(6, 500), color: '#ddd', lw: 2 });
+    }
+    for (const e of run.enemies) {
+      if (e.dead) continue;
+      const hh = e.boss ? 4.6 : 1.8;
+      if (!e.boss && e.hp < e.maxHp) {
+        const p = R.project(e.x, e.y, hh);
+        if (p) { ctx.fillStyle = '#1a1218'; ctx.fillRect(p.x - 9, p.y - 1, 18, 4); ctx.fillStyle = '#E1002B'; ctx.fillRect(p.x - 8, p.y, Math.max(0, 16 * e.hp / e.maxHp), 2); }
+      }
+      if (e.state === 'wind') { const p = R.project(e.x, e.y, hh + 0.5); if (p) UI.txt(ctx, '!', p.x, p.y, { align: 'center', font: UI.PX(9), color: '#ff3355' }); }
+    }
+    for (const f of run.fx) {
+      if (f.type === 'p') {
+        const p = R.project(f.x, f.y, 0.7);
+        if (p) { ctx.globalAlpha = 1 - f.t / f.life; ctx.fillStyle = f.color; ctx.fillRect(p.x, p.y, f.size + 0.5, f.size + 0.5); }
+      } else if (f.type === 'text') {
+        const p = R.project(f.x, f.y, 1.6);
+        if (p) { const a = f.t / f.life; ctx.globalAlpha = a > 0.7 ? (1 - a) / 0.3 : 1; UI.txt(ctx, f.txt, p.x, p.y, { align: 'center', base: 'middle', font: UI.PX(f.big ? 10 : 8), color: f.color }); }
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (run.interact && !run.over) {
+      const it = run.interact, p = R.project(it.ref.x, it.ref.y, 2.7);
+      if (p) UI.txt(ctx, (G.isTouch ? '' : '[E] ') + it.label, p.x, p.y + Math.sin(t * 6), { align: 'center', font: UI.TC(8), color: '#ffd84f' });
+    }
+    UI.renderHUD(ctx);
+  }
+
+  // ---------- 啟動：等 3D 引擎載入，失敗則用像素版 ----------
+  G.heroIdx = (() => { const s = G.Save.load(); const i = D.heroOrder.indexOf(s && s.hero); return i >= 0 ? i : 1; })();
+  let booted = false;
+  function boot() {
+    if (booted) return;
+    booted = true;
+    const gl = document.getElementById('gl');
+    if (!/[?&]2d=1/.test(location.search) && window.THREE && window.THREE_ADDONS) {
+      try { G.R3D.init(gl); G.use3D = true; } catch (e) { console.error(e); G.use3D = false; }
+    }
+    gl.style.display = G.use3D ? 'block' : 'none';
+    resize();
+    Game.toTitle();
+    requestAnimationFrame(frame);
+  }
+  if (window.THREE_ADDONS) boot();
+  else { window.addEventListener('three-ready', boot); setTimeout(boot, 8000); }
 })();

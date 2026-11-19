@@ -12,7 +12,7 @@
     skills: { wave: 1, spin: 0, dash: 0, encore: 0 },
     equip: { weapon: 'w0', armor: 'a0', acc: null },
     inv: [], potions: { hp: 3, mp: 2 },
-    unlocked: 1, defeated: [], cleared: false, kills: 0,
+    unlocked: 1, defeated: [], cleared: false, kills: 0, hero: 'luna',
   });
 
   function merge(s) {
@@ -29,6 +29,7 @@
     d.unlocked = Math.max(1, Math.min(3, num(s.unlocked, 1)));
     d.defeated = Array.isArray(s.defeated) ? s.defeated.filter((z) => D.zones[z]) : [];
     d.cleared = !!s.cleared;
+    d.hero = D.heroes[s.hero] ? s.hero : 'luna';
     return d;
   }
 

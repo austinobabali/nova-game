@@ -220,10 +220,11 @@
     attack() {
       const P = G.P;
       if (P.atk.cd > 0 || P.dashSkill || P.dash.t > 0) return;
+      const H = D.heroes[G.S.hero] || D.heroes.luna;
       const c = P.atk.window > 0 ? (P.atk.combo + 1) % 3 : 0;
-      P.atk.combo = c; P.atk.window = 0.55; P.atk.cd = c === 2 ? 0.42 : 0.24; P.atk.anim = 0.15;
-      const mult = [1, 1.15, 1.7][c];
-      const R = 26, half = 1.25;
+      P.atk.combo = c; P.atk.window = 0.55; P.atk.cd = (c === 2 ? 0.42 : 0.24) * H.cdMul; P.atk.anim = 0.15;
+      const mult = [1, 1.15, 1.7][c] * H.multMul;
+      const R = H.range, half = H.arc / 2;
       G.Combat.arcHit(P.x, P.y - 4, P.face, R, half, mult, { kb: c === 2 ? 130 : 60 });
       FX.add({ type: 'slash', x: P.x, y: P.y - 4, ang: P.face, r: R, half, dir: c === 1 ? -1 : 1, life: 0.16 });
       G.World.move(G.run.map, P, Math.cos(P.face) * 3, Math.sin(P.face) * 3);

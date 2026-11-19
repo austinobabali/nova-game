@@ -14,28 +14,46 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 <div id="wrap">
+  <canvas id="gl"></canvas>
   <canvas id="game"></canvas>
-  <div id="ui"></div>
+  <div id="ui"><div style="color:#fff;font-size:16px">載入中…</div></div>
   <div id="toasts"></div>
 </div>
 <div id="touch"></div>
 <div id="rotate"><div class="phone"></div><p>請將手機橫放遊玩</p></div>
 
-<script src="js/data.js?v=2"></script>
-<script src="js/sprites.js?v=2"></script>
-<script src="js/input.js?v=2"></script>
-<script src="js/audio.js?v=2"></script>
-<script src="js/world.js?v=2"></script>
-<script src="js/entities.js?v=2"></script>
-<script src="js/combat.js?v=2"></script>
-<script src="js/ai.js?v=2"></script>
-<script src="js/save.js?v=2"></script>
-<script src="js/ui.js?v=2"></script>
-<script src="js/touch.js?v=2"></script>
-<script src="js/main.js?v=2"></script>
+<script src="js/data.js?v=4"></script>
+<script src="js/sprites.js?v=4"></script>
+<script src="js/input.js?v=4"></script>
+<script src="js/audio.js?v=4"></script>
+<script src="js/world.js?v=4"></script>
+<script src="js/entities.js?v=4"></script>
+<script src="js/combat.js?v=4"></script>
+<script src="js/ai.js?v=4"></script>
+<script src="js/save.js?v=4"></script>
+<script src="js/r3d.js?v=4"></script>
+<script src="js/ui.js?v=4"></script>
+<script src="js/touch.js?v=4"></script>
+<script src="js/main.js?v=4"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+window.THREE = THREE;
+window.THREE_ADDONS = { EffectComposer, RenderPass, UnrealBloomPass, OutputPass };
+window.dispatchEvent(new Event('three-ready'));
+</script>
 </body>
 </html>

@@ -168,16 +168,20 @@
   const PANELS = {
     title() {
       const has = G.Save.has();
+      const H = D.heroes[D.heroOrder[G.heroIdx]];
       return `<div class="title-screen">
-        <div class="logo">NOVA</div><div class="logo-sub">星光逆襲</div>
-        <div class="tagline">從練習生一路打到年末頒獎典禮——揮舞應援棒，淨化世界的負能量！</div>
+        <div class="top"><div class="logo">NOVA</div><div class="logo-sub">星光逆襲</div></div>
+        <div class="bottom-area">
+        <div class="hero-pick"><button class="arrow" data-a="heroPrev">‹</button>
+          <div class="hp-info"><b>${H.name}</b><small>${H.role}</small></div>
+          <button class="arrow" data-a="heroNext">›</button></div>
         <div class="menu">
           ${has ? '<button class="btn" data-a="continue">繼續遊戲</button>' : ''}
           <button class="btn ${has ? 'ghost' : ''}" data-a="new">新遊戲</button>
           <button class="btn ghost" data-a="help">操作說明</button>
           ${G.canFullscreen() ? '<button class="btn ghost" data-a="fullscreen">全螢幕</button>' : ''}
         </div>
-        <div class="foot">原創作品・所有角色、團體與地點皆為虛構</div></div>`;
+        <div class="foot">原創作品・所有角色、團體與地點皆為虛構</div></div></div>`;
     },
     confirmNew() {
       return `<div class="panel small"><div class="ptitle">開始新遊戲？</div><p>現有存檔將被覆蓋。</p>
@@ -275,6 +279,8 @@
 
   const ACT = {
     close: () => UI.close(),
+    heroPrev: () => { G.heroIdx = (G.heroIdx + 2) % 3; },
+    heroNext: () => { G.heroIdx = (G.heroIdx + 1) % 3; },
     back: () => (prev ? UI.show(prev) : UI.close()),
     new: () => (G.Save.has() ? UI.show('confirmNew', 'title') : G.Game.newGame()),
     newConfirm: () => G.Game.newGame(),
