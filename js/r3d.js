@@ -527,6 +527,151 @@
     ],
   });
 
+  // ======================= 地圖裝飾（純視覺，不影響碰撞） =======================
+  function addInst(geo, mat, list, shadow) {
+    if (!list.length) return null;
+    const im = new T.InstancedMesh(geo, mat, list.length);
+    const m4 = new T.Matrix4(), q = new T.Quaternion(), eu = new T.Euler(), v = new T.Vector3(), sc = new T.Vector3(), c = new T.Color();
+    list.forEach((t, i) => {
+      eu.set(t.rx || 0, t.ry || 0, t.rz || 0); q.setFromEuler(eu); v.set(t.x, t.y, t.z);
+      sc.set(t.sx == null ? 1 : t.sx, t.sy == null ? 1 : t.sy, t.sz == null ? 1 : t.sz);
+      m4.compose(v, q, sc); im.setMatrixAt(i, m4);
+      if (t.c != null) im.setColorAt(i, c.setHex(t.c));
+    });
+    if (shadow) im.castShadow = true;
+    world.add(im);
+    return im;
+  }
+  let poolTex = null;
+  function lightPools(list) {
+    if (!list.length) return;
+    if (!poolTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      poolTex = new T.CanvasTexture(c); poolTex.userData.shared = true;
+    }
+    const mat = new T.MeshBasicMaterial({ map: poolTex, transparent: true, blending: T.AdditiveBlending, depthWrite: false, opacity: 0.55 });
+    addInst(new T.PlaneGeometry(1, 1), mat, list.map((p) => ({ x: p.x, y: 0.03, z: p.z, rx: -Math.PI / 2, sx: p.r, sy: p.r, sz: 1, c: p.c })));
+  }
+  function ledTexture() {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 64;
+    const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 128, 64);
+    gr.addColorStop(0, '#ff2fd0'); gr.addColorStop(0.5, '#5c3dff'); gr.addColorStop(1, '#5ce1ff');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 64);
+    g.fillStyle = 'rgba(0,0,0,.35)'; for (let y = 0; y < 64; y += 4) g.fillRect(0, y, 128, 1);
+    g.font = '900 22px sans-serif'; g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('★ NOVA ★', 64, 33);
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; return t;
+  }
+
+  function decorate(m) {
+    const ts = 16 * K, th = THEME[m.theme], get = (x, y) => G.World.get(m, x, y);
+    const solid = (t) => t === 1 || t === 3;
+    const Rn = (x, y, s) => hash(x * 3 + s * 17, y * 7 + s * 31);
+    const keep = [m.spawn, ...m.portals, ...(m.npcs || [])];
+    const clear = (x, y) => keep.some((p) => Math.hypot((x + 0.5) * 16 - p.x, (y + 0.5) * 16 - p.y) < 44);
+    const faces = [], floor = [];
+    for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
+      const t = get(x, y);
+      if (t === 1 && !solid(get(x, y + 1))) faces.push([x, y]);
+      if ((t === 0 || t === 2) && !clear(x, y)) floor.push([x, y]);
+    }
+    const cx = (x) => (x + 0.5) * ts, cz = (y) => (y + 0.5) * ts, fz = (y) => (y + 1) * ts + 0.02;
+    const pools = [], anim = [];
+    world.userData.anim = anim;
+    const H = th.wallH;
+
+    if (m.theme === 'hub') {
+      const posters = faces.filter(([x, y]) => Rn(x, y, 1) < 0.45);
+      addInst(BOX, toon(0xf5f2f1), posters.map(([x, y]) => ({ x: cx(x), y: H * 0.6, z: fz(y), sx: 0.95, sy: 0.75, sz: 0.04 })));
+      addInst(BOX, new T.MeshBasicMaterial({ color: 0xffffff }), posters.map(([x, y]) => ({ x: cx(x), y: H * 0.6, z: fz(y) + 0.025, sx: 0.8, sy: 0.6, sz: 0.01, c: [0xff6fb5, 0x5ce1ff, 0xa77bff, 0xffd84f][Math.floor(Rn(x, y, 2) * 4)] })));
+      const sconce = faces.filter(([x, y]) => Rn(x, y, 1) >= 0.45 && Rn(x, y, 3) < 0.5);
+      addInst(SPH, toon(0xffe9a8, 0xffd27a, 2.2), sconce.map(([x, y]) => ({ x: cx(x), y: H * 0.75, z: fz(y) + 0.08, sx: 0.12, sy: 0.16, sz: 0.08 })));
+      sconce.forEach(([x, y]) => pools.push({ x: cx(x), z: fz(y) + 0.8, r: 2.2, c: 0xffc070 }));
+      const sign = textSprite('STARLIGHT ENT.', null, '#ff5c8a', 5); sign.position.set(m.cols * ts * 0.5, H + 0.7, 1.6 * ts); world.add(sign);
+      const trophy = floor.filter(([x, y]) => solid(get(x, y - 1)) && Rn(x, y, 4) < 0.25);
+      addInst(cyl(0.22, 0.26, 0.7, 12), toon(0x2b2320), trophy.map(([x, y]) => ({ x: cx(x), y: 0.35, z: cz(y) - 0.3 })), true);
+      addInst(new T.CylinderGeometry(0.16, 0.06, 0.3, 12), toon(0xf2c14e, 0xf2c14e, 0.6), trophy.map(([x, y]) => ({ x: cx(x), y: 0.9, z: cz(y) - 0.3 })), true);
+      const rugs = floor.filter(([x, y]) => Rn(x, y, 5) < 0.03);
+      addInst(new T.CircleGeometry(1, 32), toon(0xffffff), rugs.map(([x, y]) => ({ x: cx(x), y: 0.015, z: cz(y), rx: -Math.PI / 2, sx: 1.1, sy: 0.8, c: [0x8a3ab9, 0x2f8a8a, 0xc0392b][Math.floor(Rn(x, y, 6) * 3)] })));
+      const flowers = floor.filter(([x, y]) => Rn(x, y, 7) < 0.025);
+      addInst(cyl(0.16, 0.12, 0.25, 10), toon(0xe0e0e0), flowers.map(([x, y]) => ({ x: cx(x), y: 0.13, z: cz(y) })), true);
+      addInst(SPH, toon(0xffffff), flowers.map(([x, y]) => ({ x: cx(x), y: 0.35, z: cz(y), sx: 0.2, sy: 0.15, sz: 0.2, c: [0xff6fb5, 0xffd84f, 0xff8a6a][Math.floor(Rn(x, y, 8) * 3)] })));
+    }
+
+    if (m.theme === 'practice') {
+      addInst(cyl(0.035, 0.035, ts, 8), toon(0xd9b38c), faces.map(([x, y]) => ({ x: cx(x), y: 0.95, z: fz(y) + 0.2, rz: Math.PI / 2 })), true);
+      const brackets = faces.filter(([x]) => x % 3 === 0);
+      addInst(BOX, toon(0xb0b0b8), brackets.map(([x, y]) => ({ x: cx(x), y: 0.95, z: fz(y) + 0.1, sx: 0.05, sy: 0.05, sz: 0.22 })));
+      addInst(BOX, toon(0xff6fb5, 0xff6fb5, 1.6), faces.map(([x, y]) => ({ x: cx(x), y: 0.06, z: fz(y) + 0.03, sx: ts, sy: 0.04, sz: 0.04 })));
+      const bottles = floor.filter(([x, y]) => Rn(x, y, 1) < 0.03);
+      addInst(cyl(0.07, 0.07, 0.3, 10), toon(0x6ec6ff, 0x2f8cff, 0.3), bottles.map(([x, y]) => ({ x: cx(x) + 0.3, y: 0.15, z: cz(y) })), true);
+      addInst(cyl(0.05, 0.05, 0.06, 10), toon(0xffffff), bottles.map(([x, y]) => ({ x: cx(x) + 0.3, y: 0.33, z: cz(y) })));
+      const towels = floor.filter(([x, y]) => Rn(x, y, 2) < 0.02);
+      addInst(BOX, toon(0xffffff), towels.map(([x, y]) => ({ x: cx(x), y: 0.02, z: cz(y), ry: Rn(x, y, 3) * 3, sx: 0.7, sy: 0.04, sz: 0.4, c: [0xff8fd0, 0x5ce1ff, 0xffd84f][Math.floor(Rn(x, y, 4) * 3)] })));
+      const box = floor.filter(([x, y]) => solid(get(x, y - 1)) && Rn(x, y, 5) < 0.06);
+      addInst(BOX, toon(0x2b2b33), box.map(([x, y]) => ({ x: cx(x), y: 0.22, z: cz(y) - 0.4, sx: 0.7, sy: 0.4, sz: 0.3 })), true);
+      addInst(cyl(0.1, 0.1, 0.05, 14), toon(0x111111, 0x5ce1ff, 1), box.flatMap(([x, y]) => [-0.2, 0.2].map((o) => ({ x: cx(x) + o, y: 0.22, z: cz(y) - 0.24, rx: Math.PI / 2 }))));
+      floor.filter(([x, y]) => Rn(x, y, 6) < 0.02).forEach(([x, y]) => pools.push({ x: cx(x), z: cz(y), r: 3.5, c: 0xffe0b0 }));
+    }
+
+    if (m.theme === 'street') {
+      const win = faces.filter(([x, y]) => Rn(x, y, 1) < 0.3);
+      addInst(BOX, new T.MeshBasicMaterial({ color: 0xffffff }), win.map(([x, y]) => ({ x: cx(x), y: H * 0.5, z: fz(y), sx: 1.2, sy: 0.7, sz: 0.02, c: [0xffd27a, 0xfff2c8, 0xff9a6a][Math.floor(Rn(x, y, 2) * 3)] })));
+      addInst(BOX, toon(0x2a1f24), win.map(([x, y]) => ({ x: cx(x), y: H * 0.5, z: fz(y) + 0.02, sx: 0.04, sy: 0.7, sz: 0.02 })));
+      const neon = faces.filter(([x, y]) => Rn(x, y, 1) >= 0.3 && Rn(x, y, 1) < 0.45);
+      const words = ['OPEN', 'CAFE', '24H', 'K-POP', 'LIVE', 'BAR'];
+      const ncol = ['#ff4fa3', '#4fd1ff', '#ffd84f', '#7dff9a'];
+      neon.forEach(([x, y]) => { const s = textSprite(words[Math.floor(Rn(x, y, 3) * words.length)], null, ncol[Math.floor(Rn(x, y, 4) * 4)], 1.6); s.position.set(cx(x), H + 0.35, fz(y)); world.add(s); });
+      const lamps = faces.filter(([x, y]) => x % 6 === 0 && !clear(x, y + 1));
+      addInst(cyl(0.05, 0.07, 3, 8), toon(0x3a3a44), lamps.map(([x, y]) => ({ x: cx(x), y: 1.5, z: fz(y) + 0.3 })), true);
+      addInst(BOX, toon(0x3a3a44), lamps.map(([x, y]) => ({ x: cx(x), y: 3.0, z: fz(y) + 0.6, sx: 0.08, sy: 0.08, sz: 0.7 })));
+      const bulbs = addInst(SPH, toon(0xfff2c8, 0xffd27a, 2.5), lamps.map(([x, y]) => ({ x: cx(x), y: 2.92, z: fz(y) + 0.9, sx: 0.18, sy: 0.12, sz: 0.18 })));
+      lamps.forEach(([x, y]) => pools.push({ x: cx(x), z: fz(y) + 1.2, r: 4.2, c: 0xffc070 }));
+      if (bulbs) anim.push((t) => { bulbs.material.emissiveIntensity = 2.3 + (Math.sin(t * 23) > 0.97 ? -1.5 : 0); });
+      const cones = floor.filter(([x, y]) => Rn(x, y, 5) < 0.02);
+      addInst(new T.ConeGeometry(0.16, 0.45, 10), toon(0xff7a1a), cones.map(([x, y]) => ({ x: cx(x), y: 0.25, z: cz(y) })), true);
+      addInst(BOX, toon(0xff7a1a), cones.map(([x, y]) => ({ x: cx(x), y: 0.02, z: cz(y), sx: 0.4, sy: 0.04, sz: 0.4 })));
+      addInst(cyl(0.11, 0.135, 0.06, 10), toon(0xffffff), cones.map(([x, y]) => ({ x: cx(x), y: 0.28, z: cz(y) })));
+      const puddles = floor.filter(([x, y]) => Rn(x, y, 6) < 0.03);
+      addInst(new T.CircleGeometry(1, 24), new T.MeshBasicMaterial({ color: 0x6a5aff, transparent: true, opacity: 0.35, blending: T.AdditiveBlending, depthWrite: false }),
+        puddles.map(([x, y]) => ({ x: cx(x), y: 0.02, z: cz(y), rx: -Math.PI / 2, sx: 0.9 + Rn(x, y, 7), sy: 0.5 + Rn(x, y, 8) * 0.4, rz: Rn(x, y, 9) * 3, c: [0xff4fa3, 0x4fd1ff, 0x6a5aff][Math.floor(Rn(x, y, 10) * 3)] })));
+      const bags = floor.filter(([x, y]) => solid(get(x, y - 1)) && Rn(x, y, 11) < 0.05);
+      addInst(SPH, toon(0x1b1b22), bags.map(([x, y]) => ({ x: cx(x) + (Rn(x, y, 12) - 0.5), y: 0.22, z: cz(y) - 0.4, sx: 0.3, sy: 0.25, sz: 0.28 })), true);
+    }
+
+    if (m.theme === 'stage') {
+      const led = ledTexture();
+      const scr = faces.filter(([x, y]) => Rn(x, y, 1) < 0.5);
+      addInst(BOX, new T.MeshBasicMaterial({ map: led }), scr.map(([x, y]) => ({ x: cx(x), y: H * 0.55, z: fz(y), sx: ts * 0.96, sy: H * 0.75, sz: 0.02 })));
+      const truss = faces.filter(([x]) => x % 5 === 0);
+      addInst(BOX, toon(0x8a8a9a), truss.map(([x, y]) => ({ x: cx(x), y: H + 1.2, z: fz(y) + 0.1, sx: 0.12, sy: 2.4, sz: 0.12 })), true);
+      addInst(cyl(0.18, 0.12, 0.3, 10), toon(0x222222, 0xffffff, 0.5), truss.map(([x, y]) => ({ x: cx(x), y: H + 2.3, z: fz(y) + 0.35, rx: 0.9 })));
+      // 掃掠聚光燈
+      const beams = [];
+      const beamCols = [0xff2fd0, 0x5ce1ff, 0xffd84f, 0xb070ff];
+      truss.filter((_, i) => i % 2 === 0).slice(0, 12).forEach(([x, y], i) => {
+        const g = new T.Group(); g.position.set(cx(x), H + 2.3, fz(y) + 0.35);
+        const cone = new T.Mesh(new T.ConeGeometry(1.4, 7, 20, 1, true), glow(beamCols[i % 4], 0.12));
+        cone.position.y = -3.5; g.add(cone);
+        g.userData.ph = i * 1.3; world.add(g); beams.push(g);
+      });
+      anim.push((t) => beams.forEach((g) => { g.rotation.x = 0.55 + Math.sin(t * 0.7 + g.userData.ph) * 0.35; g.rotation.z = Math.sin(t * 0.9 + g.userData.ph * 2) * 0.5; }));
+      const conf = floor.filter(([x, y]) => Rn(x, y, 2) < 0.35);
+      const cc = [0xff2fd0, 0x5ce1ff, 0xffd84f, 0xffffff, 0xb070ff];
+      addInst(new T.PlaneGeometry(0.12, 0.06), new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide }),
+        conf.flatMap(([x, y]) => [0, 1, 2].map((k) => ({ x: x * ts + Rn(x, y, k + 3) * ts, y: 0.02, z: y * ts + Rn(x, y, k + 6) * ts, rx: -Math.PI / 2, rz: Rn(x, y, k + 9) * 6, c: cc[Math.floor(Rn(x, y, k + 12) * 5)] }))));
+      const fl = floor.filter(([x, y]) => Rn(x, y, 20) < 0.025);
+      addInst(cyl(0.25, 0.3, 0.12, 14), toon(0x222233), fl.map(([x, y]) => ({ x: cx(x), y: 0.06, z: cz(y) })));
+      addInst(SPH, new T.MeshBasicMaterial({ color: 0xffffff }), fl.map(([x, y]) => ({ x: cx(x), y: 0.13, z: cz(y), sx: 0.2, sy: 0.04, sz: 0.2, c: cc[Math.floor(Rn(x, y, 21) * 4)] })));
+      fl.forEach(([x, y]) => pools.push({ x: cx(x), z: cz(y), r: 2.8, c: cc[Math.floor(Rn(x, y, 21) * 4)] }));
+      const sticks = floor.filter(([x, y]) => Rn(x, y, 22) < 0.03);
+      addInst(cyl(0.03, 0.03, 0.35, 6), new T.MeshBasicMaterial({ color: 0xffffff }), sticks.map(([x, y]) => ({ x: cx(x), y: 0.04, z: cz(y), rz: Math.PI / 2, ry: Rn(x, y, 23) * 6, c: cc[Math.floor(Rn(x, y, 24) * 3)] })));
+    }
+    lightPools(pools);
+  }
+
   function buildWorld(m) {
     if (world) { scene.remove(world); disposeTree(world); }
     for (const k in objs) { objs[k].forEach((o) => { scene.remove(o.root); disposeTree(o.root); if (o.tele) { scene.remove(o.tele); disposeTree(o.tele); } }); objs[k].clear(); }
@@ -542,9 +687,7 @@
     const walls = [];
     for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) {
       if (G.World.get(m, x, y) !== 1) continue;
-      let edge = false;
-      for (let dy = -1; dy <= 1 && !edge; dy++) for (let dx = -1; dx <= 1; dx++) { const t = G.World.get(m, x + dx, y + dy); if (t !== 1) { edge = true; break; } }
-      if (edge) walls.push([x, y]);
+      walls.push([x, y]);
     }
     const mtx = new T.Matrix4(), col = new T.Color();
     const wallMesh = new T.InstancedMesh(new T.BoxGeometry(ts, th.wallH, ts), toon(0xffffff), walls.length);
@@ -574,6 +717,7 @@
         im.castShadow = true; world.add(im);
       }
     });
+    decorate(m);
     // 傳送門
     m._portalObjs = [];
     // NPC
@@ -684,6 +828,7 @@
     while (m._portalObjs.length < m.portals.length) { const g = makePortal(m.portals[m._portalObjs.length]); world.add(g); m._portalObjs.push(g); }
     for (const g of m._portalObjs) { g.userData.ring.rotation.z += dt * (g.userData.locked ? 0.3 : 2); if (g.userData.beam) g.userData.beam.material.opacity = 0.14 + Math.sin(t * 3) * 0.05; }
     for (const { n, p } of m._npcObjs) { animPerson(p, dt, false, ''); p.root.rotation.y = Math.atan2(P.x - n.x, P.y - n.y) * 0.6; }
+    if (world.userData.anim) for (const f of world.userData.anim) f(t, dt);
     // 主角
     if (!player || playerId !== S.hero) {
       if (player) { scene.remove(player.root); disposeTree(player.root); }
